@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.justinlawes.ClaudeUsageMonitor</string>
+    <key>CFBundleName</key>
+    <string>Claude Usage Monitor</string>
+    <key>CFBundleDisplayName</key>
+    <string>Claude Usage Monitor</string>
+    <key>CFBundleVersion</key>
+    <string>1.0</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleExecutable</key>
+    <string>ClaudeUsageMonitor</string>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+    <!-- Hide from Dock and app switcher — pure menu bar app -->
+    <key>LSUIElement</key>
+    <true/>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <!-- Allow outbound HTTPS -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <false/>
+    </dict>
+    <!-- Notification usage description -->
+    <key>NSUserNotificationAlertStyle</key>
+    <string>alert</string>
+    <!-- Minimum OS -->
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+</dict>
+</plist>
