@@ -121,15 +121,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Always show today's usage as 0-100% of daily budget
         // e.g. budget=14%, used=3% → 3/14*100 = 21%
-        let (label, colorValue): (String, Double)
+        let (pctLabel, colorValue): (String, Double)
         if let budget = dailyBudget, budget > 0 {
             let pct = min(Double(todayUsed) / Double(budget) * 100, 999)
-            label      = "\(Int(pct.rounded()))%"
+            pctLabel   = "\(Int(pct.rounded()))%"
             colorValue = pct
         } else {
             // Fallback to session % if no daily budget available
-            label      = "\(Int(sessionPct))%"
+            pctLabel   = "\(Int(sessionPct))%"
             colorValue = sessionPct
+        }
+
+        // Pace arrow (only when daily budget is available and today's usage is tracked)
+        var paceArrow = ""
+        var paceColor: NSColor? = nil
+        if let budget = dailyBudget, budget > 0, todayUsed > 0 {
+            let secondsElapsed = Date().timeIntervalSince(Calendar.current.startOfDay(for: Date()))
+            let dayFraction = secondsElapsed / 86400.0
+            let usageFraction = todayUsed / budget
+            let diff = usageFraction - dayFraction
+            if diff > 0.15 {
+                paceArrow = "↑"
+                paceColor = .systemOrange
+            } else if diff < -0.15 {
+                paceArrow = "↓"
+                paceColor = .systemGreen
+            }
         }
 
         let color: NSColor
@@ -139,14 +156,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case ..<90: color = .systemOrange
         default:    color = .systemRed
         }
-        let attrs: [NSAttributedString.Key: Any] = [
-            .foregroundColor: color,
-            .font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
-        ]
-        button.attributedTitle = NSAttributedString(string: label, attributes: attrs)
+        let mainFont = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
+        let arrowFont = NSFont.systemFont(ofSize: 9, weight: .regular)
+
+        if paceArrow.isEmpty {
+            let attrs: [NSAttributedString.Key: Any] = [.foregroundColor: color, .font: mainFont]
+            button.attributedTitle = NSAttributedString(string: pctLabel, attributes: attrs)
+        } else {
+            let result = NSMutableAttributedString(
+                string: pctLabel,
+                attributes: [.foregroundColor: color, .font: mainFont]
+            )
+            result.append(NSAttributedString(
+                string: paceArrow,
+                attributes: [.foregroundColor: paceColor ?? color, .font: arrowFont]
+            ))
+            button.attributedTitle = result
+        }
+
+        let label = paceArrow.isEmpty ? pctLabel : "\(pctLabel)\(paceArrow)"
 
         // Tooltip
         var tip = "Today: \(label) of daily budget"
+
         if let budget = dailyBudget {
             tip += String(format: " (%.1f/%.1f%% weekly)", todayUsed, budget)
         }
