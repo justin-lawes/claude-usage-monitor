@@ -2,54 +2,28 @@ import AppKit
 import SwiftUI
 import Combine
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
-    private var window: NSWindow!
+    private var popover: NSPopover!
     private lazy var service = ClaudeService()
     private var cancellables = Set<AnyCancellable>()
     private var statusItem: NSStatusItem?
+    private var lastPopoverClose: Date?
 
     private var notifiedSession = false
     private var notifiedWeekly = false
     private var notifiedDailyBudgetDate: Date?
     private var notifiedExtraUsage = false
+    private var notifiedWrapUp = false
     private var lastSessionPct: Double = 0
 
     // MARK: - App Launch
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        setupMainMenu()
         setupStatusItem()
-        setupWindow()
+        setupPopover()
         setupObservers()
         service.start()
-    }
-
-    // Keep running in menu bar when window is closed
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        false
-    }
-
-    func applicationDidBecomeActive(_ notification: Notification) {
-        if service.lastUpdated != nil || service.isLoading {
-            service.refresh()
-        }
-    }
-
-    // MARK: - Menu
-
-    private func setupMainMenu() {
-        let mainMenu = NSMenu()
-        let appMenuItem = NSMenuItem()
-        mainMenu.addItem(appMenuItem)
-        let appMenu = NSMenu()
-        appMenuItem.submenu = appMenu
-        appMenu.addItem(NSMenuItem(
-            title: "Quit Claude Usage",
-            action: #selector(NSApplication.terminate(_:)),
-            keyEquivalent: "q"
-        ))
-        NSApp.mainMenu = mainMenu
     }
 
     // MARK: - Status Item
@@ -67,7 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if event.type == .rightMouseUp {
             showStatusMenu()
         } else {
-            toggleWindow()
+            togglePopover()
         }
     }
 
@@ -89,23 +63,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func refreshFromMenu() { service.refresh() }
 
     @objc private func openSettings() {
-        if !window.isVisible {
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
+        showPopover()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            NotificationCenter.default.post(name: .openSettings, object: nil)
         }
-        // Post a notification that ContentView listens to for opening settings
-        NotificationCenter.default.post(name: .openSettings, object: nil)
     }
 
-    private func toggleWindow() {
-        if window.isVisible {
-            window.orderOut(nil)
+    // MARK: - Popover
+
+    private func setupPopover() {
+        let root = ContentView().environmentObject(service)
+        let host = NSHostingController(rootView: root)
+        let idealSize = host.sizeThatFits(in: CGSize(width: 320, height: CGFloat.greatestFiniteMagnitude))
+        host.preferredContentSize = NSSize(width: 320, height: max(idealSize.height, 300))
+
+        popover = NSPopover()
+        popover.contentViewController = host
+        popover.behavior = .transient
+        popover.animates = true
+        popover.delegate = self
+    }
+
+    private func togglePopover() {
+        if popover.isShown {
+            popover.performClose(nil)
+        } else if let last = lastPopoverClose, Date().timeIntervalSince(last) < 0.3 {
+            // Just closed by clicking the button — don't reopen immediately
         } else {
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            service.refresh()
+            showPopover()
         }
     }
+
+    private func showPopover() {
+        guard let button = statusItem?.button else { return }
+        guard !popover.isShown else { return }
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        NSApp.activate(ignoringOtherApps: true)
+        service.refresh()
+    }
+
+    // MARK: - NSPopoverDelegate
+
+    func popoverDidClose(_ notification: Notification) {
+        lastPopoverClose = Date()
+    }
+
+    // MARK: - Status Item Label
 
     private func updateStatusItem(usage: UsageResponse?) {
         guard let button = statusItem?.button else { return }
@@ -118,28 +121,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let weeklyPct   = usage.sevenDay?.percentUsed ?? 0
         let dailyBudget = usage.dailyWeeklyBudget
         let todayUsed   = service.todayWeeklyUsed
+        let sessionThr  = UserDefaults.standard.object(forKey: "sessionThreshold") as? Int ?? 80
 
-        // Always show today's usage as 0-100% of daily budget
-        // e.g. budget=14%, used=3% → 3/14*100 = 21%
+        // Daily budget as 0-100%
         let (pctLabel, colorValue): (String, Double)
         if let budget = dailyBudget, budget > 0 {
             let pct = min(Double(todayUsed) / Double(budget) * 100, 999)
             pctLabel   = "\(Int(pct.rounded()))%"
             colorValue = pct
         } else {
-            // Fallback to session % if no daily budget available
             pctLabel   = "\(Int(sessionPct))%"
             colorValue = sessionPct
         }
 
-        // Pace arrow (only when daily budget is available and today's usage is tracked)
+        // Pace arrow
         var paceArrow = ""
         var paceColor: NSColor? = nil
         if let budget = dailyBudget, budget > 0, todayUsed > 0 {
             let secondsElapsed = Date().timeIntervalSince(Calendar.current.startOfDay(for: Date()))
-            let dayFraction = secondsElapsed / 86400.0
             let usageFraction = todayUsed / budget
-            let diff = usageFraction - dayFraction
+            let diff = usageFraction - (secondsElapsed / 86400.0)
             if diff > 0.15 {
                 paceArrow = "↑"
                 paceColor = .systemOrange
@@ -149,36 +150,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        let color: NSColor
-        switch colorValue {
-        case ..<50: color = .systemGreen
-        case ..<75: color = .systemYellow
-        case ..<90: color = .systemOrange
-        default:    color = .systemRed
+        // Session countdown: show when session is high and reset is within 60 min
+        var countdownStr = ""
+        if sessionPct >= Double(sessionThr) - 10,
+           let resetDate = usage.fiveHour?.resetsDate {
+            let diff = resetDate.timeIntervalSince(Date())
+            if diff > 0 && diff < 3600 {
+                let mins = Int(diff / 60)
+                countdownStr = mins > 0 ? " \(mins)m" : " <1m"
+            }
         }
-        let mainFont = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
-        let arrowFont = NSFont.systemFont(ofSize: 9, weight: .regular)
 
-        if paceArrow.isEmpty {
-            let attrs: [NSAttributedString.Key: Any] = [.foregroundColor: color, .font: mainFont]
-            button.attributedTitle = NSAttributedString(string: pctLabel, attributes: attrs)
-        } else {
-            let result = NSMutableAttributedString(
-                string: pctLabel,
-                attributes: [.foregroundColor: color, .font: mainFont]
-            )
+        let mainColor: NSColor
+        switch colorValue {
+        case ..<50: mainColor = .systemGreen
+        case ..<75: mainColor = .systemYellow
+        case ..<90: mainColor = .systemOrange
+        default:    mainColor = .systemRed
+        }
+        let mainFont  = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
+        let smallFont = NSFont.systemFont(ofSize: 9, weight: .regular)
+        let dimColor  = NSColor.secondaryLabelColor
+
+        let result = NSMutableAttributedString(
+            string: pctLabel,
+            attributes: [.foregroundColor: mainColor, .font: mainFont]
+        )
+        if !paceArrow.isEmpty {
             result.append(NSAttributedString(
                 string: paceArrow,
-                attributes: [.foregroundColor: paceColor ?? color, .font: arrowFont]
+                attributes: [.foregroundColor: paceColor ?? mainColor, .font: smallFont]
             ))
-            button.attributedTitle = result
         }
-
-        let label = paceArrow.isEmpty ? pctLabel : "\(pctLabel)\(paceArrow)"
+        if !countdownStr.isEmpty {
+            result.append(NSAttributedString(
+                string: countdownStr,
+                attributes: [.foregroundColor: dimColor, .font: smallFont]
+            ))
+        }
+        button.attributedTitle = result
 
         // Tooltip
-        var tip = "Today: \(label) of daily budget"
-
+        let displayLabel = pctLabel + paceArrow + countdownStr
+        var tip = "Today: \(pctLabel)\(paceArrow) of daily budget"
         if let budget = dailyBudget {
             tip += String(format: " (%.1f/%.1f%% weekly)", todayUsed, budget)
         }
@@ -187,31 +201,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             tip += " (\(resetStr))"
         }
         tip += "  ·  Weekly: \(Int(weeklyPct))%"
+        _ = displayLabel  // used above
         button.toolTip = tip
-    }
-
-    // MARK: - Window
-
-    private func setupWindow() {
-        let root = ContentView().environmentObject(service)
-        let host = NSHostingController(rootView: root)
-        let idealSize = host.sizeThatFits(in: CGSize(width: 320, height: 9999))
-        let height = max(idealSize.height, 300)
-
-        window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 320, height: height),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = "Claude Usage"
-        window.contentViewController = host
-        window.isReleasedWhenClosed = false   // prevent use-after-free when red X is clicked
-        window.setFrameAutosaveName("ClaudeUsageWindow")
-        window.contentMinSize = NSSize(width: 280, height: 250)
-        window.level = .floating
-        window.center()
-        window.makeKeyAndOrderFront(nil)
     }
 
     // MARK: - Observers
@@ -234,6 +225,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let weeklyPct   = usage.sevenDay?.percentUsed ?? 0
         let sessionThr  = UserDefaults.standard.object(forKey: "sessionThreshold") as? Int ?? 80
         let weeklyThr   = UserDefaults.standard.object(forKey: "weeklyThreshold")  as? Int ?? 75
+        let wrapUpMins  = UserDefaults.standard.object(forKey: "wrapUpMinutes")    as? Int ?? 15
 
         // Session threshold
         if sessionPct >= Double(sessionThr) && !notifiedSession {
@@ -246,12 +238,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             notifiedSession = false
         }
 
+        // Wrap-up alert: session is high AND reset is coming soon
+        if let resetDate = usage.fiveHour?.resetsDate {
+            let secsUntilReset = resetDate.timeIntervalSince(Date())
+            let wrapUpSecs = Double(wrapUpMins * 60)
+            if sessionPct >= Double(sessionThr) && secsUntilReset > 0 && secsUntilReset <= wrapUpSecs && !notifiedWrapUp {
+                let mins = Int(secsUntilReset / 60)
+                service.sendNotification(
+                    title: "Claude session resets in \(mins)m",
+                    body: "At \(Int(sessionPct))% — wrap up or save your work"
+                )
+                notifiedWrapUp = true
+            }
+        }
+
         // Session reset detection (drop > 20 points = reset occurred)
         if lastSessionPct > 30 && sessionPct < lastSessionPct - 20 {
             service.sendNotification(
                 title: "Claude session reset",
                 body: "5-hour window refreshed — full session capacity available"
             )
+            notifiedWrapUp = false
         }
         lastSessionPct = sessionPct
 

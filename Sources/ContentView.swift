@@ -417,6 +417,7 @@ struct SettingsView: View {
     @EnvironmentObject var service: ClaudeService
     @AppStorage("sessionThreshold") private var sessionThreshold = 80
     @AppStorage("weeklyThreshold")  private var weeklyThreshold  = 75
+    @AppStorage("wrapUpMinutes")    private var wrapUpMinutes    = 15
     @AppStorage("refreshInterval")  private var refreshInterval  = 5
     @State private var launchAtLogin = false
     @Environment(\.dismiss) private var dismiss
@@ -456,6 +457,10 @@ struct SettingsView: View {
 
                 Stepper("Weekly alert: \(weeklyThreshold)%",
                         value: $weeklyThreshold, in: 50...90, step: 5)
+                    .font(.system(size: 13))
+
+                Stepper("Wrap-up alert: \(wrapUpMinutes) min before reset",
+                        value: $wrapUpMinutes, in: 5...30, step: 5)
                     .font(.system(size: 13))
 
                 Divider()
