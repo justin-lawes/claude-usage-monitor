@@ -106,8 +106,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
               let buttonWindow = button.window else { return .zero }
         let buttonRectInWindow = button.convert(button.bounds, to: nil)
         let buttonRectOnScreen = buttonWindow.convertToScreen(buttonRectInWindow)
-        let x = buttonRectOnScreen.midX - 160
-        let y = buttonRectOnScreen.minY - 480
+        let screen = buttonWindow.screen ?? NSScreen.main ?? NSScreen.screens[0]
+        // visibleFrame.maxY is exactly the bottom of the menu bar
+        let panelTop = screen.visibleFrame.maxY
+        let x = max(screen.frame.minX, min(buttonRectOnScreen.midX - 160, screen.frame.maxX - 320))
+        let y = panelTop - 480
         return NSRect(x: x, y: y, width: 320, height: 480)
     }
 
