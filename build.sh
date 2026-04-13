@@ -23,6 +23,7 @@ swiftc \
   -framework UserNotifications \
   -framework Combine \
   -framework ServiceManagement \
+  -framework Carbon \
   -target arm64-apple-macosx13.0 \
   -O \
   -o "$BUILD_DIR/$APP_NAME"

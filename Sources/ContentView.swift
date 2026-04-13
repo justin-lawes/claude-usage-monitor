@@ -20,6 +20,7 @@ struct ContentView: View {
             }
         }
         .frame(width: 320)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
         .sheet(isPresented: $showSettings) {
             SettingsView().environmentObject(service)
         }
@@ -199,6 +200,11 @@ struct ContentView: View {
                     if todayUsed > 0 {
                         paceLabel(todayUsed: todayUsed, budget: budget)
                     }
+                    if let runway = weeklyRunway(usage: usage) {
+                        Text(runway)
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.25))
+                    }
                 }
             } else {
                 Text("—")
@@ -234,6 +240,29 @@ struct ContentView: View {
         return Text(label)
             .font(.system(size: 10))
             .foregroundColor(color)
+    }
+
+    // MARK: - Weekly Runway
+
+    private func weeklyRunway(usage: UsageResponse) -> String? {
+        let records = service.dailyHistory.sorted { $0.dateString < $1.dateString }
+        var deltas: [Double] = []
+        for i in 0..<records.count - 1 {
+            let delta = records[i + 1].openingUtilization - records[i].openingUtilization
+            if delta > 0 { deltas.append(delta) }
+        }
+        if service.todayWeeklyUsed > 0 { deltas.append(service.todayWeeklyUsed) }
+        guard deltas.count >= 2 else { return nil }
+        let avgDaily = deltas.reduce(0, +) / Double(deltas.count)
+        guard avgDaily > 0.1 else { return nil }
+        let weeklyRemaining = max(0, 100.0 - (usage.sevenDay?.utilization ?? 0))
+        guard weeklyRemaining > 0 else { return nil }
+        let daysLeft = weeklyRemaining / avgDaily
+        if daysLeft >= 1 {
+            return "~\(Int(daysLeft.rounded())) days of weekly budget at avg pace"
+        } else {
+            return "weekly budget nearly gone at avg pace"
+        }
     }
 
     // MARK: - History
@@ -382,6 +411,12 @@ struct HistoryChart: View {
                             .fill(barColor(bar))
                             .frame(height: barHeight(bar))
                     }
+                    .overlay(
+                        Rectangle()
+                            .fill(Color.white.opacity(0.2))
+                            .frame(height: 1),
+                        alignment: .top
+                    )
                     Text(bar.label)
                         .font(.system(size: 8))
                         .foregroundColor(bar.isToday ? .white.opacity(0.5) : .white.opacity(0.25))

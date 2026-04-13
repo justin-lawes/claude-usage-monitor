@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import Combine
+import Carbon.HIToolbox
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
@@ -8,6 +9,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panelHost: NSHostingController<AnyView>?
     private var eventMonitor: Any?
     private var lastPanelClose: Date?
+    private var hotKeyRef: EventHotKeyRef?
+    private var hotKeyHandler: EventHandlerRef?
 
     private lazy var service = ClaudeService()
     private var cancellables = Set<AnyCancellable>()
@@ -26,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupStatusItem()
         setupPanel()
         setupObservers()
+        registerHotKey()
         service.start()
     }
 
@@ -86,8 +90,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             defer: false
         )
         p.contentViewController = host
-        p.backgroundColor = NSColor(red: 0.10, green: 0.10, blue: 0.12, alpha: 1)
-        p.isOpaque = true
+        p.backgroundColor = .clear
+        p.isOpaque = false
         p.hasShadow = true
         p.level = .screenSaver
         p.isReleasedWhenClosed = false
@@ -107,7 +111,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return NSRect(x: x, y: y, width: 320, height: 480)
     }
 
-    private func togglePanel() {
+    func togglePanel() {
         guard let panel else { return }
         if panel.isVisible {
             closePanel()
@@ -141,6 +145,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSEvent.removeMonitor(monitor)
             eventMonitor = nil
         }
+    }
+
+    // MARK: - Global Hotkey (⌥⌘C)
+
+    private func registerHotKey() {
+        var eventSpec = EventTypeSpec(
+            eventClass: OSType(kEventClassKeyboard),
+            eventKind: UInt32(kEventHotKeyPressed)
+        )
+        InstallEventHandler(
+            GetApplicationEventTarget(),
+            { (_, _, userData) -> OSStatus in
+                guard let ptr = userData else { return OSStatus(eventNotHandledErr) }
+                let del = Unmanaged<AppDelegate>.fromOpaque(ptr).takeUnretainedValue()
+                DispatchQueue.main.async { del.togglePanel() }
+                return noErr
+            },
+            1, &eventSpec,
+            Unmanaged.passUnretained(self).toOpaque(),
+            &hotKeyHandler
+        )
+        var hotKeyID = EventHotKeyID()
+        hotKeyID.signature = 0x434C554D // "CLUM"
+        hotKeyID.id = 1
+        RegisterEventHotKey(
+            UInt32(kVK_ANSI_C),
+            UInt32(cmdKey | optionKey),
+            hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &hotKeyRef
+        )
     }
 
     // MARK: - Status Item Label
