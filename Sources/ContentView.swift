@@ -6,6 +6,7 @@ import ServiceManagement
 struct ContentView: View {
     @EnvironmentObject var service: ClaudeService
     @State private var showSettings = false
+    @State private var refreshRotation: Double = 0
 
     var body: some View {
         ZStack {
@@ -72,11 +73,21 @@ struct ContentView: View {
                 Image(systemName: "arrow.clockwise")
                     .font(.system(size: 13))
                     .foregroundColor(.white.opacity(0.5))
-                    .rotationEffect(.degrees(service.isLoading ? 360 : 0))
-                    .animation(service.isLoading ? .linear(duration: 1).repeatForever(autoreverses: false) : .linear(duration: 0),
-                               value: service.isLoading)
+                    .rotationEffect(.degrees(refreshRotation))
             }
             .buttonStyle(.plain)
+            .onChange(of: service.isLoading) { loading in
+                if loading {
+                    refreshRotation = 0
+                    withAnimation(.linear(duration: 0.8).repeatForever(autoreverses: false)) {
+                        refreshRotation = 360
+                    }
+                } else {
+                    withAnimation(.linear(duration: 0.1)) {
+                        refreshRotation = 0
+                    }
+                }
+            }
             Button(action: { showSettings = true }) {
                 Image(systemName: "gearshape")
                     .font(.system(size: 13))
