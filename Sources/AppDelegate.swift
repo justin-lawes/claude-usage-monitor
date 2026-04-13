@@ -119,19 +119,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let dailyBudget = usage.dailyWeeklyBudget
         let todayUsed   = service.todayWeeklyUsed
 
-        // Label: session % when active; daily remaining when session is low
+        // Always show today's usage as 0-100% of daily budget
+        // e.g. budget=14%, used=3% → 3/14*100 = 21%
         let (label, colorValue): (String, Double)
-        if sessionPct >= 30 {
+        if let budget = dailyBudget, budget > 0 {
+            let pct = min(Double(todayUsed) / Double(budget) * 100, 999)
+            label      = "\(Int(pct.rounded()))%"
+            colorValue = pct
+        } else {
+            // Fallback to session % if no daily budget available
             label      = "\(Int(sessionPct))%"
             colorValue = sessionPct
-        } else if let budget = dailyBudget {
-            let remaining = budget - todayUsed
-            label      = "D\(max(0, remaining))%"
-            // Invert color: low remaining = bad
-            colorValue = remaining <= 0 ? 100 : Double(max(0, budget - remaining)) / Double(max(1, budget)) * 100
-        } else {
-            label      = "W\(Int(weeklyPct))%"
-            colorValue = weeklyPct
         }
 
         let color: NSColor
@@ -148,15 +146,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         button.attributedTitle = NSAttributedString(string: label, attributes: attrs)
 
         // Tooltip
-        var tip = "Session: \(Int(sessionPct))%"
+        var tip = "Today: \(label) of daily budget"
+        if let budget = dailyBudget {
+            tip += " (\(todayUsed)/\(budget)% weekly)"
+        }
+        tip += "  ·  Session: \(Int(sessionPct))%"
         if let resetStr = usage.fiveHour?.timeUntilReset, !resetStr.isEmpty {
             tip += " (\(resetStr))"
         }
         tip += "  ·  Weekly: \(Int(weeklyPct))%"
-        if let budget = dailyBudget {
-            let remaining = budget - todayUsed
-            tip += "  ·  Today: \(max(0, remaining))% left"
-        }
         button.toolTip = tip
     }
 
@@ -227,7 +225,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Weekly threshold
         if weeklyPct >= Double(weeklyThr) && !notifiedWeekly {
-            let budget = usage.dailyWeeklyBudget.map { "Daily budget: ~\($0)% remaining" } ?? ""
+            let budget = usage.dailyWeeklyBudget.map { String(format: "Daily budget: ~%.1f%% remaining", $0) } ?? ""
             service.sendNotification(
                 title: "Claude weekly usage at \(Int(weeklyPct))%",
                 body: budget
@@ -243,10 +241,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let alreadyNotifiedToday = notifiedDailyBudgetDate.map {
                 Calendar.current.isDateInToday($0)
             } ?? false
-            if todayUsed > budget && !alreadyNotifiedToday {
+            if Double(todayUsed) > budget && !alreadyNotifiedToday {
                 service.sendNotification(
-                    title: "Over today's Claude budget by \(todayUsed - budget)%",
-                    body: "Daily budget ~\(budget)% · \(100 - (usage.sevenDay?.utilization ?? 0))% weekly left"
+                    title: "Over today's Claude budget by \(String(format: "%.1f", Double(todayUsed) - budget))%",
+                    body: "Daily budget ~\(String(format: "%.1f", budget))% · \(100 - (usage.sevenDay?.utilization ?? 0))% weekly left"
                 )
                 notifiedDailyBudgetDate = Date()
             }

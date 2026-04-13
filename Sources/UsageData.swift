@@ -93,10 +93,10 @@ struct UsageResponse: Codable {
     }
 
     /// Weekly % remaining divided by days remaining — how much weekly budget per day.
-    var dailyWeeklyBudget: Int? {
+    var dailyWeeklyBudget: Double? {
         guard let days = daysUntilReset else { return nil }
         let remaining = Double(max(0, 100 - (sevenDay?.utilization ?? 0)))
-        return Int(remaining / Double(days))
+        return remaining / Double(days)
     }
 }
 

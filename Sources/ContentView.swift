@@ -137,16 +137,17 @@ struct ContentView: View {
             if let budget = usage.dailyWeeklyBudget, let days = usage.daysUntilReset {
                 let todayUsed = service.todayWeeklyUsed
                 let weeklyRemaining = 100 - (usage.sevenDay?.utilization ?? 0)
-                let todayRemaining = budget - todayUsed
+                let todayRemaining = budget - Double(todayUsed)
+                let budgetStr = String(format: "%.1f", budget)
 
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(alignment: .firstTextBaseline) {
                         if todayRemaining < 0 {
-                            Text("Over by \(abs(todayRemaining))% today")
+                            Text("Over by \(String(format: "%.1f", abs(todayRemaining)))% today")
                                 .font(.system(size: 13, weight: .semibold).monospacedDigit())
                                 .foregroundColor(Color(red: 0.95, green: 0.55, blue: 0.20))
                         } else {
-                            Text("~\(todayRemaining)% left today")
+                            Text("~\(String(format: "%.1f", todayRemaining))% left today")
                                 .font(.system(size: 13, weight: .semibold).monospacedDigit())
                                 .foregroundColor(.white.opacity(0.85))
                         }
@@ -159,7 +160,7 @@ struct ContentView: View {
                     HStack {
                         Text(todayUsed > 0 ? "↑\(todayUsed)% since first run today" : "tracking since launch")
                         Spacer()
-                        Text("~\(budget)%/day · \(days) day\(days == 1 ? "" : "s") until reset")
+                        Text("~\(budgetStr)%/day · \(days) day\(days == 1 ? "" : "s") until reset")
                     }
                     .font(.system(size: 10))
                     .foregroundColor(.white.opacity(0.3))
@@ -186,7 +187,7 @@ struct ContentView: View {
             HistoryChart(
                 records: service.dailyHistory,
                 todayUsed: service.todayWeeklyUsed,
-                dailyBudget: usage.dailyWeeklyBudget ?? 14
+                dailyBudget: Int(usage.dailyWeeklyBudget ?? 14)
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
