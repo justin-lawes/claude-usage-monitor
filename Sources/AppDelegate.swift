@@ -73,9 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     private func setupPopover() {
         let root = ContentView().environmentObject(service)
-        let host = NSHostingController(rootView: root)
-        // Initial size — SwiftUI will update preferredContentSize as content loads
-        host.preferredContentSize = NSSize(width: 320, height: 480)
+        let host = FixedSizeHostingController(rootView: root)
 
         popover = NSPopover()
         popover.contentViewController = host
@@ -303,4 +301,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
 extension Notification.Name {
     static let openSettings = Notification.Name("openSettings")
+}
+
+/// Prevents SwiftUI from updating preferredContentSize as content loads,
+/// which causes NSPopover to reposition and drift into the menu bar.
+private final class FixedSizeHostingController<Root: View>: NSHostingController<Root> {
+    override var preferredContentSize: NSSize {
+        get { NSSize(width: 320, height: 480) }
+        set { }
+    }
 }
