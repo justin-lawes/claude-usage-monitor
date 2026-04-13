@@ -2,13 +2,16 @@ import AppKit
 import SwiftUI
 import Combine
 
-final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate {
 
-    private var popover: NSPopover!
+    private var panel: NSPanel?
+    private var panelHost: NSHostingController<AnyView>?
+    private var eventMonitor: Any?
+    private var lastPanelClose: Date?
+
     private lazy var service = ClaudeService()
     private var cancellables = Set<AnyCancellable>()
     private var statusItem: NSStatusItem?
-    private var lastPopoverClose: Date?
 
     private var notifiedSession = false
     private var notifiedWeekly = false
@@ -21,7 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
-        setupPopover()
+        setupPanel()
         setupObservers()
         service.start()
     }
@@ -41,7 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         if event.type == .rightMouseUp {
             showStatusMenu()
         } else {
-            togglePopover()
+            togglePanel()
         }
     }
 
@@ -63,46 +66,81 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     @objc private func refreshFromMenu() { service.refresh() }
 
     @objc private func openSettings() {
-        showPopover()
+        showPanel()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             NotificationCenter.default.post(name: .openSettings, object: nil)
         }
     }
 
-    // MARK: - Popover
+    // MARK: - Panel
 
-    private func setupPopover() {
-        let root = ContentView().environmentObject(service)
-        let host = FixedSizeHostingController(rootView: root)
+    private func setupPanel() {
+        let root = AnyView(ContentView().environmentObject(service))
+        let host = NSHostingController(rootView: root)
+        host.view.frame = NSRect(x: 0, y: 0, width: 320, height: 480)
 
-        popover = NSPopover()
-        popover.contentViewController = host
-        popover.behavior = .transient
-        popover.animates = true
-        popover.delegate = self
+        let p = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 480),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        p.contentViewController = host
+        p.backgroundColor = NSColor(red: 0.10, green: 0.10, blue: 0.12, alpha: 1)
+        p.isOpaque = true
+        p.hasShadow = true
+        p.level = .popUpMenu
+        p.isReleasedWhenClosed = false
+        p.collectionBehavior = [.canJoinAllSpaces, .transient]
+
+        panel = p
+        panelHost = host
     }
 
-    private func togglePopover() {
-        if popover.isShown {
-            popover.performClose(nil)
-        } else if let last = lastPopoverClose, Date().timeIntervalSince(last) < 0.3 {
+    private func panelFrame() -> NSRect {
+        guard let button = statusItem?.button,
+              let buttonWindow = button.window else { return .zero }
+        let buttonRectInWindow = button.convert(button.bounds, to: nil)
+        let buttonRectOnScreen = buttonWindow.convertToScreen(buttonRectInWindow)
+        let x = buttonRectOnScreen.midX - 160
+        let y = buttonRectOnScreen.minY - 480
+        return NSRect(x: x, y: y, width: 320, height: 480)
+    }
+
+    private func togglePanel() {
+        guard let panel else { return }
+        if panel.isVisible {
+            closePanel()
+        } else if let last = lastPanelClose, Date().timeIntervalSince(last) < 0.3 {
             // Just closed by clicking the button — don't reopen immediately
         } else {
-            showPopover()
+            showPanel()
         }
     }
 
-    private func showPopover() {
-        guard let button = statusItem?.button else { return }
-        guard !popover.isShown else { return }
-        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+    private func showPanel() {
+        guard let panel else { return }
+        panel.setFrame(panelFrame(), display: false)
+        panel.orderFront(nil)
         service.refresh()
+
+        // Close when clicking outside the panel
+        eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            guard let self, let panel = self.panel else { return }
+            // Ignore clicks inside the panel itself
+            if !NSMouseInRect(NSEvent.mouseLocation, panel.frame, false) {
+                self.closePanel()
+            }
+        }
     }
 
-    // MARK: - NSPopoverDelegate
-
-    func popoverDidClose(_ notification: Notification) {
-        lastPopoverClose = Date()
+    private func closePanel() {
+        panel?.orderOut(nil)
+        lastPanelClose = Date()
+        if let monitor = eventMonitor {
+            NSEvent.removeMonitor(monitor)
+            eventMonitor = nil
+        }
     }
 
     // MARK: - Status Item Label
@@ -301,13 +339,4 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
 extension Notification.Name {
     static let openSettings = Notification.Name("openSettings")
-}
-
-/// Prevents SwiftUI from updating preferredContentSize as content loads,
-/// which causes NSPopover to reposition and drift into the menu bar.
-private final class FixedSizeHostingController<Root: View>: NSHostingController<Root> {
-    override var preferredContentSize: NSSize {
-        get { NSSize(width: 320, height: 480) }
-        set { }
-    }
 }
