@@ -172,7 +172,7 @@ struct ContentView: View {
                                 .foregroundColor(.white.opacity(0.85))
                         }
                         Spacer()
-                        Text("\(weeklyRemaining)% weekly left")
+                        Text("\(Int(weeklyRemaining))% weekly left")
                             .font(.system(size: 11).monospacedDigit())
                             .foregroundColor(.white.opacity(0.4))
                     }

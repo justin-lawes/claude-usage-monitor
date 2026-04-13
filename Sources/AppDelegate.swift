@@ -74,8 +74,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private func setupPopover() {
         let root = ContentView().environmentObject(service)
         let host = NSHostingController(rootView: root)
-        let idealSize = host.sizeThatFits(in: CGSize(width: 320, height: CGFloat.greatestFiniteMagnitude))
-        host.preferredContentSize = NSSize(width: 320, height: max(idealSize.height, 300))
+        // Initial size — SwiftUI will update preferredContentSize as content loads
+        host.preferredContentSize = NSSize(width: 320, height: 480)
 
         popover = NSPopover()
         popover.contentViewController = host
@@ -191,7 +191,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         button.attributedTitle = result
 
         // Tooltip
-        let displayLabel = pctLabel + paceArrow + countdownStr
         var tip = "Today: \(pctLabel)\(paceArrow) of daily budget"
         if let budget = dailyBudget {
             tip += String(format: " (%.1f/%.1f%% weekly)", todayUsed, budget)
@@ -201,7 +200,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             tip += " (\(resetStr))"
         }
         tip += "  ·  Weekly: \(Int(weeklyPct))%"
-        _ = displayLabel  // used above
         button.toolTip = tip
     }
 
