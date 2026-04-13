@@ -89,7 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         p.backgroundColor = NSColor(red: 0.10, green: 0.10, blue: 0.12, alpha: 1)
         p.isOpaque = true
         p.hasShadow = true
-        p.level = .popUpMenu
+        p.level = .screenSaver
         p.isReleasedWhenClosed = false
         p.collectionBehavior = [.canJoinAllSpaces, .transient]
 
