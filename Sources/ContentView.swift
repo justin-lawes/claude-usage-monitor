@@ -20,7 +20,7 @@ struct ContentView: View {
         }
         .frame(width: 320)
         .sheet(isPresented: $showSettings) {
-            SettingsView()
+            SettingsView().environmentObject(service)
         }
         .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
             showSettings = true
@@ -33,6 +33,10 @@ struct ContentView: View {
         VStack(spacing: 0) {
             headerBar
             Divider().background(Color.white.opacity(0.08))
+
+            if service.weeklyResetDetected {
+                weeklyResetBanner
+            }
 
             if let usage = service.usage {
                 VStack(spacing: 16) {
@@ -82,6 +86,22 @@ struct ContentView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+    }
+
+    // MARK: - Weekly Reset Banner
+
+    private var weeklyResetBanner: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "arrow.clockwise.circle.fill")
+                .foregroundColor(Color(red: 0.25, green: 0.72, blue: 0.48))
+            Text("Weekly usage reset")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(Color(red: 0.25, green: 0.72, blue: 0.48))
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(Color(red: 0.25, green: 0.72, blue: 0.48).opacity(0.1))
     }
 
     // MARK: - Meters
@@ -158,12 +178,16 @@ struct ContentView: View {
                     }
 
                     HStack {
-                        Text(todayUsed > 0 ? "↑\(todayUsed)% since first run today" : "tracking since launch")
+                        Text(todayUsed > 0 ? "↑\(String(format: "%.1f", todayUsed))% since first run today" : "tracking since launch")
                         Spacer()
                         Text("~\(budgetStr)%/day · \(days) day\(days == 1 ? "" : "s") until reset")
                     }
                     .font(.system(size: 10))
                     .foregroundColor(.white.opacity(0.3))
+
+                    if todayUsed > 0 {
+                        paceLabel(todayUsed: todayUsed, budget: budget)
+                    }
                 }
             } else {
                 Text("—")
@@ -172,6 +196,33 @@ struct ContentView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Pace Indicator
+
+    private func paceLabel(todayUsed: Double, budget: Double) -> some View {
+        let cal = Calendar.current
+        let now = Date()
+        let secondsElapsed = now.timeIntervalSince(cal.startOfDay(for: now))
+        let dayFraction = secondsElapsed / 86400.0
+        let usageFraction = budget > 0 ? todayUsed / budget : 0
+        let diff = usageFraction - dayFraction
+
+        let label: String
+        let color: Color
+        if diff > 0.15 {
+            label = "ahead of pace"
+            color = Color(red: 0.95, green: 0.55, blue: 0.20)
+        } else if diff < -0.15 {
+            label = "under pace"
+            color = Color(red: 0.25, green: 0.72, blue: 0.48)
+        } else {
+            label = "on pace"
+            color = .white.opacity(0.35)
+        }
+        return Text(label)
+            .font(.system(size: 10))
+            .foregroundColor(color)
     }
 
     // MARK: - History
@@ -187,7 +238,7 @@ struct ContentView: View {
             HistoryChart(
                 records: service.dailyHistory,
                 todayUsed: service.todayWeeklyUsed,
-                dailyBudget: Int(usage.dailyWeeklyBudget ?? 14)
+                dailyBudget: usage.dailyWeeklyBudget ?? 14.0
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -274,13 +325,13 @@ struct ContentView: View {
 
 struct HistoryChart: View {
     let records: [DailyRecord]
-    let todayUsed: Int
-    let dailyBudget: Int
+    let todayUsed: Double
+    let dailyBudget: Double
 
     private struct DayBar: Identifiable {
         let id: String
         let label: String
-        let used: Int
+        let used: Double
         let isToday: Bool
     }
 
@@ -363,8 +414,10 @@ struct HistoryChart: View {
 // MARK: - Settings View
 
 struct SettingsView: View {
+    @EnvironmentObject var service: ClaudeService
     @AppStorage("sessionThreshold") private var sessionThreshold = 80
     @AppStorage("weeklyThreshold")  private var weeklyThreshold  = 75
+    @AppStorage("refreshInterval")  private var refreshInterval  = 5
     @State private var launchAtLogin = false
     @Environment(\.dismiss) private var dismiss
 
@@ -404,6 +457,23 @@ struct SettingsView: View {
                 Stepper("Weekly alert: \(weeklyThreshold)%",
                         value: $weeklyThreshold, in: 50...90, step: 5)
                     .font(.system(size: 13))
+
+                Divider()
+
+                Text("Refresh Interval")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.secondary)
+
+                Picker("Refresh every", selection: $refreshInterval) {
+                    Text("1 min").tag(1)
+                    Text("2 min").tag(2)
+                    Text("5 min").tag(5)
+                    Text("10 min").tag(10)
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: refreshInterval) { val in
+                    service.setRefreshInterval(val)
+                }
             }
             .padding(16)
         }

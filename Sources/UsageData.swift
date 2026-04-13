@@ -3,7 +3,7 @@ import Foundation
 // MARK: - API Response Models
 
 struct UsagePeriod: Codable {
-    let utilization: Int?
+    let utilization: Double?
     let resetsAt: String
 
     enum CodingKeys: String, CodingKey {
@@ -12,7 +12,7 @@ struct UsagePeriod: Codable {
     }
 
     var percentUsed: Double {
-        Double(utilization ?? 0)
+        utilization ?? 0
     }
 
     var resetsDate: Date? {
@@ -95,7 +95,7 @@ struct UsageResponse: Codable {
     /// Weekly % remaining divided by days remaining — how much weekly budget per day.
     var dailyWeeklyBudget: Double? {
         guard let days = daysUntilReset else { return nil }
-        let remaining = Double(max(0, 100 - (sevenDay?.utilization ?? 0)))
+        let remaining = max(0.0, 100.0 - (sevenDay?.utilization ?? 0))
         return remaining / Double(days)
     }
 }
@@ -104,8 +104,8 @@ struct UsageResponse: Codable {
 
 struct DailyRecord: Codable, Identifiable {
     var id: String { dateString }
-    let dateString: String        // "2026-04-11"
-    let openingUtilization: Int   // weekly % at first reading of this day
+    let dateString: String         // "2026-04-11"
+    let openingUtilization: Double // weekly % at first reading of this day
 }
 
 // MARK: - JS callback wrapper

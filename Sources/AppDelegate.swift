@@ -148,7 +148,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Tooltip
         var tip = "Today: \(label) of daily budget"
         if let budget = dailyBudget {
-            tip += " (\(todayUsed)/\(budget)% weekly)"
+            tip += String(format: " (%.1f/%.1f%% weekly)", todayUsed, budget)
         }
         tip += "  ·  Session: \(Int(sessionPct))%"
         if let resetStr = usage.fiveHour?.timeUntilReset, !resetStr.isEmpty {

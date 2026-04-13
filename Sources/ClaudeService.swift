@@ -13,11 +13,16 @@ final class ClaudeService: NSObject, ObservableObject {
     @Published var lastUpdated: Date?
     @Published var errorMessage: String?
     /// Weekly utilization % consumed today (delta since start of calendar day).
-    @Published var todayWeeklyUsed: Int = 0
+    @Published var todayWeeklyUsed: Double = 0
     @Published var dailyHistory: [DailyRecord] = []
 
-    private var dayStartUtilization: Int? {
-        get { UserDefaults.standard.object(forKey: "dayStartUtilization") as? Int }
+    private var dayStartUtilization: Double? {
+        get {
+            let val = UserDefaults.standard.object(forKey: "dayStartUtilization")
+            if let d = val as? Double { return d }
+            if let i = val as? Int { return Double(i) }  // migrate old Int values
+            return nil
+        }
         set { UserDefaults.standard.set(newValue, forKey: "dayStartUtilization") }
     }
     private var dayStartDate: Date? {
@@ -27,8 +32,12 @@ final class ClaudeService: NSObject, ObservableObject {
 
     private var webView: WKWebView!
     private var hiddenWindow: NSWindow!
+    @Published var weeklyResetDetected = false
+
     private var refreshTimer: Timer?
-    private let refreshInterval: TimeInterval = 5 * 60 // 5 min
+    private var refreshIntervalMinutes: Int {
+        UserDefaults.standard.object(forKey: "refreshInterval") as? Int ?? 5
+    }
     private var isFetching = false          // prevent duplicate fetches per load cycle
     private var loadingTimeoutTimer: Timer? // guard against stuck isLoading state
 
@@ -82,9 +91,15 @@ final class ClaudeService: NSObject, ObservableObject {
 
     // MARK: - Refresh Timer
 
+    func setRefreshInterval(_ minutes: Int) {
+        UserDefaults.standard.set(minutes, forKey: "refreshInterval")
+        scheduleRefresh()
+    }
+
     private func scheduleRefresh() {
         refreshTimer?.invalidate()
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
+        let interval = TimeInterval(refreshIntervalMinutes * 60)
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             DispatchQueue.main.async { self?.loadUsagePage() }
         }
     }
@@ -211,18 +226,23 @@ final class ClaudeService: NSObject, ObservableObject {
 
     // MARK: - Day Tracking
 
-    private func updateTodayTracking(weeklyUtilization: Int) {
+    private func updateTodayTracking(weeklyUtilization: Double) {
         let cal = Calendar.current
         let now = Date()
         if dayStartDate == nil || !cal.isDate(dayStartDate!, inSameDayAs: now) {
             dayStartUtilization = weeklyUtilization
             dayStartDate = now
             appendHistoryRecord(dateString: Self.todayString(), opening: weeklyUtilization)
+            weeklyResetDetected = false
+        }
+        // Detect weekly reset: utilization dropped > 15 pts below today's opening
+        if let startUtil = dayStartUtilization, startUtil > 10, weeklyUtilization < startUtil - 15 {
+            weeklyResetDetected = true
         }
         todayWeeklyUsed = max(0, weeklyUtilization - (dayStartUtilization ?? weeklyUtilization))
     }
 
-    private func appendHistoryRecord(dateString: String, opening: Int) {
+    private func appendHistoryRecord(dateString: String, opening: Double) {
         guard dailyHistory.last?.dateString != dateString else { return }
         dailyHistory.append(DailyRecord(dateString: dateString, openingUtilization: opening))
         if dailyHistory.count > 8 { dailyHistory = Array(dailyHistory.suffix(8)) }
@@ -296,7 +316,7 @@ extension ClaudeService: WKScriptMessageHandler {
                 usage = usageData
                 lastUpdated = Date()
                 errorMessage = nil
-                updateTodayTracking(weeklyUtilization: usageData.sevenDay?.utilization ?? 0)
+                updateTodayTracking(weeklyUtilization: usageData.sevenDay?.utilization ?? 0.0)
             } else if let err = response.error, err.contains("Not logged in") {
                 isLoggedIn = false
             } else {
