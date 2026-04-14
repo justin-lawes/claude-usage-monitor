@@ -355,7 +355,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if Double(todayUsed) > budget && !alreadyNotifiedToday {
                 service.sendNotification(
                     title: "Over today's Claude budget by \(String(format: "%.1f", Double(todayUsed) - budget))%",
-                    body: "Daily budget ~\(String(format: "%.1f", budget))% · \(100 - (usage.sevenDay?.utilization ?? 0))% weekly left"
+                    body: "Daily budget ~\(String(format: "%.1f", budget))% · \(Int(100 - (usage.sevenDay?.utilization ?? 0)))% weekly left"
                 )
                 notifiedDailyBudgetDate = Date()
             }
