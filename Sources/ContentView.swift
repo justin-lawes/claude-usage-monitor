@@ -227,10 +227,10 @@ struct ContentView: View {
 
         let label: String
         let color: Color
-        if diff > 0.15 {
+        if diff > 0.05 {
             label = "ahead of pace"
             color = Color(red: 0.95, green: 0.55, blue: 0.20)
-        } else if diff < -0.15 {
+        } else if diff < -0.05 {
             label = "under pace"
             color = Color(red: 0.25, green: 0.72, blue: 0.48)
         } else {

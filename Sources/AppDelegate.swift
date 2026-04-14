@@ -215,10 +215,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let secondsElapsed = Date().timeIntervalSince(Calendar.current.startOfDay(for: Date()))
             let usageFraction = todayUsed / budget
             let diff = usageFraction - (secondsElapsed / 86400.0)
-            if diff > 0.15 {
+            if diff > 0.05 {
                 paceArrow = "↑"
                 paceColor = .systemOrange
-            } else if diff < -0.15 {
+            } else if diff < -0.05 {
                 paceArrow = "↓"
                 paceColor = .systemGreen
             }
