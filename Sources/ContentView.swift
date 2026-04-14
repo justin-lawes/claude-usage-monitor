@@ -200,6 +200,9 @@ struct ContentView: View {
                     if todayUsed > 0 {
                         paceLabel(todayUsed: todayUsed, budget: budget)
                     }
+                    if todayUsed > 0 {
+                        projectionLabel(todayUsed: todayUsed, budget: budget)
+                    }
                     if let runway = weeklyRunway(usage: usage) {
                         Text(runway)
                             .font(.system(size: 10))
@@ -249,6 +252,31 @@ struct ContentView: View {
         return Text(label)
             .font(.system(size: 10))
             .foregroundColor(color)
+    }
+
+    // MARK: - End-of-Day Projection
+
+    @ViewBuilder
+    private func projectionLabel(todayUsed: Double, budget: Double) -> some View {
+        let dayFraction = Date().timeIntervalSince(Calendar.current.startOfDay(for: Date())) / 86400.0
+        if dayFraction > 0.05 {
+            let projected = todayUsed / dayFraction
+            let diff = projected - budget
+            let projStr = String(format: "%.1f", projected)
+            if diff > 0.3 {
+                Text("~\(projStr)% by midnight (\(String(format: "%.1f", diff))% over)")
+                    .font(.system(size: 10))
+                    .foregroundColor(Color(red: 0.95, green: 0.55, blue: 0.20))
+            } else if diff < -0.3 {
+                Text("~\(projStr)% by midnight (\(String(format: "%.1f", abs(diff)))% under)")
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.25))
+            } else {
+                Text("~\(projStr)% by midnight")
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.25))
+            }
+        }
     }
 
     // MARK: - Weekly Runway

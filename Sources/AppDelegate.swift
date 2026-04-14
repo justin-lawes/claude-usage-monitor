@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import Combine
 import Carbon.HIToolbox
+import UserNotifications
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
@@ -22,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var notifiedExtraUsage = false
     private var notifiedWrapUp = false
     private var lastSessionPct: Double = 0
+    private var scheduledBackOnPaceTime: Date?
 
     // MARK: - App Launch
 
@@ -292,6 +294,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Notifications
 
+    private func scheduleBackOnPaceNotification(at targetTime: Date) {
+        guard targetTime > Date() else { return }
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: ["backOnPace"])
+        let content = UNMutableNotificationContent()
+        content.title = "Back on pace"
+        content.body = "Daily budget is back in sync — Claude is available"
+        content.sound = .default
+        if #available(macOS 12.0, *) { content.interruptionLevel = .timeSensitive }
+        let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: targetTime)
+        let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
+        center.add(UNNotificationRequest(identifier: "backOnPace", content: content, trigger: trigger))
+    }
+
+    private func cancelBackOnPaceNotification() {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["backOnPace"])
+    }
+
     private func checkAndNotify(usage: UsageResponse) {
         let sessionPct  = usage.fiveHour?.percentUsed ?? 0
         let weeklyPct   = usage.sevenDay?.percentUsed ?? 0
@@ -358,6 +378,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     body: "Daily budget ~\(String(format: "%.1f", budget))% · \(Int(100 - (usage.sevenDay?.utilization ?? 0)))% weekly left"
                 )
                 notifiedDailyBudgetDate = Date()
+            }
+        }
+
+        // Back-on-pace notification
+        if let budget = usage.dailyWeeklyBudget, budget > 0, service.todayWeeklyUsed > 0 {
+            let todayUsed = service.todayWeeklyUsed
+            let secondsElapsed = Date().timeIntervalSince(Calendar.current.startOfDay(for: Date()))
+            let usageFraction = todayUsed / budget
+            let dayFraction = secondsElapsed / 86400.0
+            let diff = usageFraction - dayFraction
+            if diff > 0.05 {
+                let targetTime = Calendar.current.startOfDay(for: Date()).addingTimeInterval(usageFraction * 86400.0)
+                // Only reschedule if target changed by more than 2 min
+                if scheduledBackOnPaceTime.map({ abs($0.timeIntervalSince(targetTime)) > 120 }) ?? true {
+                    scheduleBackOnPaceNotification(at: targetTime)
+                    scheduledBackOnPaceTime = targetTime
+                }
+            } else {
+                cancelBackOnPaceNotification()
+                scheduledBackOnPaceTime = nil
             }
         }
 
