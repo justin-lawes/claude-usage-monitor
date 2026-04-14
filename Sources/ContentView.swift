@@ -217,6 +217,12 @@ struct ContentView: View {
 
     // MARK: - Pace Indicator
 
+    private static let paceTimeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "h:mma"
+        return f
+    }()
+
     private func paceLabel(todayUsed: Double, budget: Double) -> some View {
         let cal = Calendar.current
         let now = Date()
@@ -228,7 +234,10 @@ struct ContentView: View {
         let label: String
         let color: Color
         if diff > 0.05 {
-            label = "ahead of pace"
+            // Compute when dayFraction will catch up to usageFraction
+            let targetTime = cal.startOfDay(for: now).addingTimeInterval(usageFraction * 86400.0)
+            let timeStr = Self.paceTimeFormatter.string(from: targetTime).lowercased()
+            label = "ahead of pace · wait until \(timeStr)"
             color = Color(red: 0.95, green: 0.55, blue: 0.20)
         } else if diff < -0.05 {
             label = "under pace"
