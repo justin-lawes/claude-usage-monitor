@@ -199,9 +199,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let todayUsed   = service.todayWeeklyUsed
         let sessionThr  = UserDefaults.standard.object(forKey: "sessionThreshold") as? Int ?? 80
 
-        // Daily budget as 0-100%
+        // Daily budget as 0-100%; fall back to session% when today's delta hasn't accumulated yet
         let (pctLabel, colorValue): (String, Double)
-        if let budget = dailyBudget, budget > 0 {
+        if let budget = dailyBudget, budget > 0, todayUsed > 0 {
             let pct = min(Double(todayUsed) / Double(budget) * 100, 999)
             pctLabel   = "\(Int(pct.rounded()))%"
             colorValue = pct
@@ -210,16 +210,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             colorValue = sessionPct
         }
 
-        // Pace arrow
+        // Pace arrow + wait-until time
         var paceArrow = ""
         var paceColor: NSColor? = nil
+        var waitUntilStr = ""
         if let budget = dailyBudget, budget > 0, todayUsed > 0 {
-            let secondsElapsed = Date().timeIntervalSince(Calendar.current.startOfDay(for: Date()))
+            let activeHours = ActiveHours.fromDefaults()
             let usageFraction = todayUsed / budget
-            let diff = usageFraction - (secondsElapsed / 86400.0)
+            let diff = usageFraction - activeHours.dayFraction()
             if diff > 0.05 {
                 paceArrow = "↑"
                 paceColor = .systemOrange
+                let targetTime = activeHours.targetTime(forUsageFraction: usageFraction)
+                let f = DateFormatter()
+                f.dateFormat = "h:mma"
+                waitUntilStr = " " + f.string(from: targetTime).lowercased()
             } else if diff < -0.05 {
                 paceArrow = "↓"
                 paceColor = .systemGreen
@@ -256,6 +261,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             result.append(NSAttributedString(
                 string: paceArrow,
                 attributes: [.foregroundColor: paceColor ?? mainColor, .font: smallFont]
+            ))
+        }
+        if !waitUntilStr.isEmpty {
+            result.append(NSAttributedString(
+                string: waitUntilStr,
+                attributes: [.foregroundColor: paceColor ?? dimColor, .font: smallFont]
             ))
         }
         if !countdownStr.isEmpty {
@@ -384,12 +395,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Back-on-pace notification
         if let budget = usage.dailyWeeklyBudget, budget > 0, service.todayWeeklyUsed > 0 {
             let todayUsed = service.todayWeeklyUsed
-            let secondsElapsed = Date().timeIntervalSince(Calendar.current.startOfDay(for: Date()))
+            let activeHours = ActiveHours.fromDefaults()
             let usageFraction = todayUsed / budget
-            let dayFraction = secondsElapsed / 86400.0
-            let diff = usageFraction - dayFraction
+            let diff = usageFraction - activeHours.dayFraction()
             if diff > 0.05 {
-                let targetTime = Calendar.current.startOfDay(for: Date()).addingTimeInterval(usageFraction * 86400.0)
+                let targetTime = activeHours.targetTime(forUsageFraction: usageFraction)
                 // Only reschedule if target changed by more than 2 min
                 if scheduledBackOnPaceTime.map({ abs($0.timeIntervalSince(targetTime)) > 120 }) ?? true {
                     scheduleBackOnPaceNotification(at: targetTime)

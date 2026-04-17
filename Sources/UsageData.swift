@@ -108,6 +108,54 @@ struct DailyRecord: Codable, Identifiable {
     let openingUtilization: Double // weekly % at first reading of this day
 }
 
+// MARK: - Active Hours
+
+struct ActiveHours {
+    let startHour: Int  // 0–23
+    let endHour: Int    // 1–24  (24 = midnight end-of-day)
+
+    static func fromDefaults() -> ActiveHours {
+        ActiveHours(
+            startHour: UserDefaults.standard.object(forKey: "activeStartHour") as? Int ?? 9,
+            endHour:   UserDefaults.standard.object(forKey: "activeEndHour")   as? Int ?? 24
+        )
+    }
+
+    private var startSecs: Double { Double(startHour) * 3600 }
+    private var endSecs:   Double { Double(endHour)   * 3600 }
+    var duration: Double { endSecs - startSecs }
+
+    /// 0 before active window starts, ramps 0→1 across the window, 1 after it ends.
+    func dayFraction(at date: Date = Date()) -> Double {
+        let elapsed = date.timeIntervalSince(Calendar.current.startOfDay(for: date))
+        guard duration > 0 else { return 0 }
+        return max(0, min(1, (elapsed - startSecs) / duration))
+    }
+
+    /// Clock time when dayFraction will equal usageFraction (i.e., "back on pace").
+    func targetTime(forUsageFraction usageFraction: Double, on date: Date = Date()) -> Date {
+        let secs = startSecs + usageFraction * duration
+        return Calendar.current.startOfDay(for: date).addingTimeInterval(secs)
+    }
+
+    /// Human-readable label for the end of the active window (e.g. "midnight", "11pm").
+    var endLabel: String {
+        if endHour == 24 { return "midnight" }
+        if endHour == 12 { return "noon" }
+        let isPM = endHour >= 12
+        let h = endHour > 12 ? endHour - 12 : endHour
+        return "\(h)\(isPM ? "pm" : "am")"
+    }
+
+    static func hourLabel(_ h: Int) -> String {
+        if h == 0 || h == 24 { return "Midnight" }
+        if h == 12 { return "Noon" }
+        let isPM = h >= 12
+        let hour = h > 12 ? h - 12 : h
+        return "\(hour)\(isPM ? "pm" : "am")"
+    }
+}
+
 // MARK: - JS callback wrapper
 
 struct CallbackResponse: Decodable {

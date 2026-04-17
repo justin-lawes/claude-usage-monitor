@@ -1,0 +1,24 @@
+<Window x:Class="ClaudeUsageMonitor.PopupWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        ShowActivated="True"
+        Topmost="True"
+        ResizeMode="NoResize"
+        Width="320" Height="480"
+        Deactivated="Window_Deactivated">
+    <Border CornerRadius="12" Background="#1A1A1E" BorderBrush="#33FFFFFF" BorderThickness="1">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="20" ShadowDepth="4"
+                              Color="Black" Opacity="0.5" Direction="270" />
+        </Border.Effect>
+        <Grid>
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel x:Name="MainContent" />
+            </ScrollViewer>
+        </Grid>
+    </Border>
+</Window>

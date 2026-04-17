@@ -226,18 +226,74 @@ final class ClaudeService: NSObject, ObservableObject {
 
     // MARK: - Day Tracking
 
+    // MARK: - Shared Baseline Sync (Dropbox)
+
+    private static var syncFilePath: String? {
+        // Look for the project folder in common Dropbox locations
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let candidates = [
+            "\(home)/Dropbox/01_STUDIO/02_internalProjects/ClaudeCode/ClaudeUsageMonitor/.day_sync.json",
+            "\(home)/Library/CloudStorage/Dropbox/01_STUDIO/02_internalProjects/ClaudeCode/ClaudeUsageMonitor/.day_sync.json"
+        ]
+        for path in candidates {
+            let dir = (path as NSString).deletingLastPathComponent
+            if FileManager.default.fileExists(atPath: dir) { return path }
+        }
+        return nil
+    }
+
+    private func readSharedBaseline(dateString: String) -> Double? {
+        guard let path = Self.syncFilePath,
+              let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              json["date"] as? String == dateString,
+              let val = json["dayStartUtilization"] as? Double else { return nil }
+        return val
+    }
+
+    private func writeSharedBaseline(dateString: String, utilization: Double) {
+        guard let path = Self.syncFilePath else { return }
+        let json: [String: Any] = [
+            "date": dateString,
+            "dayStartUtilization": utilization,
+            "updatedBy": "mac",
+            "updatedAt": ISO8601DateFormatter().string(from: Date())
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted) {
+            try? data.write(to: URL(fileURLWithPath: path))
+        }
+    }
+
     private func updateTodayTracking(weeklyUtilization: Double) {
         let cal = Calendar.current
         let now = Date()
-        if dayStartDate == nil || !cal.isDate(dayStartDate!, inSameDayAs: now) {
-            dayStartUtilization = weeklyUtilization
+        let todayStr = Self.todayString()
+        let isNewDay = dayStartDate == nil || !cal.isDate(dayStartDate!, inSameDayAs: now)
+
+        // Always check the shared sync file — the other platform may have updated it
+        let sharedBaseline = readSharedBaseline(dateString: todayStr)
+
+        if isNewDay {
+            if let shared = sharedBaseline {
+                dayStartUtilization = shared
+            } else {
+                dayStartUtilization = weeklyUtilization
+                writeSharedBaseline(dateString: todayStr, utilization: weeklyUtilization)
+            }
             dayStartDate = now
-            appendHistoryRecord(dateString: Self.todayString(), opening: weeklyUtilization)
+            appendHistoryRecord(dateString: todayStr, opening: dayStartUtilization ?? weeklyUtilization)
             weeklyResetDetected = false
+        } else if let shared = sharedBaseline,
+                  abs(shared - (dayStartUtilization ?? 0)) > 0.5 {
+            // Mid-day sync: other platform wrote a different baseline — adopt it
+            dayStartUtilization = shared
         }
         // Detect weekly reset: utilization dropped > 15 pts below today's opening
         if let startUtil = dayStartUtilization, startUtil > 10, weeklyUtilization < startUtil - 15 {
             weeklyResetDetected = true
+            // Baseline to 0 so todayWeeklyUsed = full weekly usage since the reset
+            dayStartUtilization = 0
+            writeSharedBaseline(dateString: todayStr, utilization: 0)
         }
         todayWeeklyUsed = max(0, weeklyUtilization - (dayStartUtilization ?? weeklyUtilization))
     }

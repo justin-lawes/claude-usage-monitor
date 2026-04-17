@@ -1,0 +1,2 @@
+D:\Dropbox\01_STUDIO\02_internalProjects\ClaudeCode\ClaudeUsageMonitor\WindowsSources\publish\ClaudeUsageMonitor.pdb
+D:\Dropbox\01_STUDIO\02_internalProjects\ClaudeCode\ClaudeUsageMonitor\WindowsSources\publish\ClaudeUsageMonitor.exe

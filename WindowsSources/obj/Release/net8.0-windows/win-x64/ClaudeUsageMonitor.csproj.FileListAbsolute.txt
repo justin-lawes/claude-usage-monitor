@@ -1,0 +1,15 @@
+D:\Dropbox\01_STUDIO\02_internalProjects\ClaudeCode\ClaudeUsageMonitor\WindowsSources\obj\Release\net8.0-windows\win-x64\ClaudeUsageMonitor.csproj.AssemblyReference.cache
+D:\Dropbox\01_STUDIO\02_internalProjects\ClaudeCode\ClaudeUsageMonitor\WindowsSources\obj\Release\net8.0-windows\win-x64\PopupWindow.baml
+D:\Dropbox\01_STUDIO\02_internalProjects\ClaudeCode\ClaudeUsageMonitor\WindowsSources\obj\Release\net8.0-windows\win-x64\SettingsWindow.baml
+D:\Dropbox\01_STUDIO\02_internalProjects\ClaudeCode\ClaudeUsageMonitor\WindowsSources\obj\Release\net8.0-windows\win-x64\App.baml
+D:\Dropbox\01_STUDIO\02_internalProjects\ClaudeCode\ClaudeUsageMonitor\WindowsSources\obj\Release\net8.0-windows\win-x64\PopupWindow.g.cs
+D:\Dropbox\01_STUDIO\02_internalProjects\ClaudeCode\ClaudeUsageMonitor\WindowsSources\obj\Release\net8.0-windows\win-x64\SettingsWindow.g.cs
+D:\Dropbox\01_STUDIO\02_internalProjects\ClaudeCode\ClaudeUsageMonitor\WindowsSources\obj\Release\net8.0-windows\win-x64\App.g.cs
+D:\Dropbox\01_STUDIO\02_internalProjects\ClaudeCode\ClaudeUsageMonitor\WindowsSources\obj\Release\net8.0-windows\win-x64\ClaudeUsageMonitor_Content.g.cs
+D:\Dropbox\01_STUDIO\02_internalProjects\ClaudeCode\ClaudeUsageMonitor\WindowsSources\obj\Release\net8.0-windows\win-x64\ClaudeUsageMonitor_MarkupCompile.cache
+D:\Dropbox\01_STUDIO\02_internalProjects\ClaudeCode\ClaudeUsageMonitor\WindowsSources\obj\Release\net8.0-windows\win-x64\ClaudeUsageMonitor.g.resources
+D:\Dropbox\01_STUDIO\02_internalProjects\ClaudeCode\ClaudeUsageMonitor\WindowsSources\obj\Release\net8.0-windows\win-x64\ClaudeUsageMonitor.GeneratedMSBuildEditorConfig.editorconfig
+D:\Dropbox\01_STUDIO\02_internalProjects\ClaudeCode\ClaudeUsageMonitor\WindowsSources\obj\Release\net8.0-windows\win-x64\ClaudeUsageMonitor.AssemblyInfoInputs.cache
+D:\Dropbox\01_STUDIO\02_internalProjects\ClaudeCode\ClaudeUsageMonitor\WindowsSources\obj\Release\net8.0-windows\win-x64\ClaudeUsageMonitor.AssemblyInfo.cs
+D:\Dropbox\01_STUDIO\02_internalProjects\ClaudeCode\ClaudeUsageMonitor\WindowsSources\obj\Release\net8.0-windows\win-x64\ClaudeUsageMonitor.csproj.CoreCompileInputs.cache
+D:\Dropbox\01_STUDIO\02_internalProjects\ClaudeCode\ClaudeUsageMonitor\WindowsSources\obj\Release\net8.0-windows\win-x64\ClaudeUsageMonitor.sourcelink.json

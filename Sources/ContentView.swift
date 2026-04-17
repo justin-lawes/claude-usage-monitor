@@ -227,18 +227,16 @@ struct ContentView: View {
     }()
 
     private func paceLabel(todayUsed: Double, budget: Double) -> some View {
-        let cal = Calendar.current
         let now = Date()
-        let secondsElapsed = now.timeIntervalSince(cal.startOfDay(for: now))
-        let dayFraction = secondsElapsed / 86400.0
+        let activeHours = ActiveHours.fromDefaults()
+        let dayFraction = activeHours.dayFraction(at: now)
         let usageFraction = budget > 0 ? todayUsed / budget : 0
         let diff = usageFraction - dayFraction
 
         let label: String
         let color: Color
         if diff > 0.05 {
-            // Compute when dayFraction will catch up to usageFraction
-            let targetTime = cal.startOfDay(for: now).addingTimeInterval(usageFraction * 86400.0)
+            let targetTime = activeHours.targetTime(forUsageFraction: usageFraction, on: now)
             let timeStr = Self.paceTimeFormatter.string(from: targetTime).lowercased()
             label = "ahead of pace · wait until \(timeStr)"
             color = Color(red: 0.95, green: 0.55, blue: 0.20)
@@ -258,21 +256,23 @@ struct ContentView: View {
 
     @ViewBuilder
     private func projectionLabel(todayUsed: Double, budget: Double) -> some View {
-        let dayFraction = Date().timeIntervalSince(Calendar.current.startOfDay(for: Date())) / 86400.0
+        let activeHours = ActiveHours.fromDefaults()
+        let dayFraction = activeHours.dayFraction()
         if dayFraction > 0.05 {
             let projected = todayUsed / dayFraction
             let diff = projected - budget
             let projStr = String(format: "%.1f", projected)
+            let endLabel = activeHours.endLabel
             if diff > 0.3 {
-                Text("~\(projStr)% by midnight (\(String(format: "%.1f", diff))% over)")
+                Text("~\(projStr)% by \(endLabel) (\(String(format: "%.1f", diff))% over)")
                     .font(.system(size: 10))
                     .foregroundColor(Color(red: 0.95, green: 0.55, blue: 0.20))
             } else if diff < -0.3 {
-                Text("~\(projStr)% by midnight (\(String(format: "%.1f", abs(diff)))% under)")
+                Text("~\(projStr)% by \(endLabel) (\(String(format: "%.1f", abs(diff)))% under)")
                     .font(.system(size: 10))
                     .foregroundColor(.white.opacity(0.25))
             } else {
-                Text("~\(projStr)% by midnight")
+                Text("~\(projStr)% by \(endLabel)")
                     .font(.system(size: 10))
                     .foregroundColor(.white.opacity(0.25))
             }
@@ -459,6 +459,7 @@ struct HistoryChart: View {
                         .foregroundColor(bar.isToday ? .white.opacity(0.5) : .white.opacity(0.25))
                 }
                 .frame(maxWidth: .infinity)
+                .help(bar.used > 0 ? String(format: "%.1f%% of weekly", bar.used) : "no data")
             }
         }
         .frame(height: 44)
@@ -502,6 +503,8 @@ struct SettingsView: View {
     @AppStorage("weeklyThreshold")  private var weeklyThreshold  = 75
     @AppStorage("wrapUpMinutes")    private var wrapUpMinutes    = 15
     @AppStorage("refreshInterval")  private var refreshInterval  = 5
+    @AppStorage("activeStartHour")  private var activeStartHour  = 9
+    @AppStorage("activeEndHour")    private var activeEndHour    = 24
     @State private var launchAtLogin = false
     @Environment(\.dismiss) private var dismiss
 
@@ -561,6 +564,40 @@ struct SettingsView: View {
                 .pickerStyle(.segmented)
                 .onChange(of: refreshInterval) { val in
                     service.setRefreshInterval(val)
+                }
+
+                Divider()
+
+                Text("Active Hours")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.secondary)
+
+                Text("Pace and projection math uses this window instead of midnight-to-midnight.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+
+                HStack {
+                    Text("Start")
+                        .font(.system(size: 13))
+                    Spacer()
+                    Picker("", selection: $activeStartHour) {
+                        ForEach(0..<24) { h in
+                            Text(ActiveHours.hourLabel(h)).tag(h)
+                        }
+                    }
+                    .frame(width: 110)
+                }
+
+                HStack {
+                    Text("End")
+                        .font(.system(size: 13))
+                    Spacer()
+                    Picker("", selection: $activeEndHour) {
+                        ForEach(1...24, id: \.self) { h in
+                            Text(ActiveHours.hourLabel(h)).tag(h)
+                        }
+                    }
+                    .frame(width: 110)
                 }
             }
             .padding(16)
